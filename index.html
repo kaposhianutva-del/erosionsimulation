@@ -74,7 +74,7 @@ oninput="updateLabels()">
 
 <label>Vegetation Cover: <span id="vegVal">40%</span></label>
 <input type="range" id="veg" min="0" max="100" value="40"
-oninput="updateTerrain(); updateLabels();">
+oninput="updateTerrain(); updateLabels()">
 
 <label>Ground Type</label>
 <select id="ground" onchange="updateTerrain()">
@@ -116,7 +116,7 @@ let depositionData = [];
 let heightData = [];
 
 // --------------------
-// INIT LAND (REALISTIC SLOPE)
+// INIT LAND
 // --------------------
 function initLand() {
     land = [];
@@ -132,7 +132,7 @@ function initLand() {
 initLand();
 
 // --------------------
-// UPDATE LABELS
+// LABELS
 // --------------------
 function updateLabels() {
     document.getElementById("slopeVal").innerText =
@@ -146,9 +146,10 @@ function updateLabels() {
 }
 
 // --------------------
-// DRAW LAND
+// DRAW LAND (STATIC VEGETATION)
 // --------------------
 function drawLand(waterParticles = []) {
+
     const c = document.getElementById("land");
     const ctx = c.getContext("2d");
 
@@ -172,52 +173,66 @@ function drawLand(waterParticles = []) {
     ctx.fillStyle = groundColor;
     ctx.fill();
 
-    // water
-    ctx.fillStyle = "rgba(0,150,255,0.7)";
+    // water river
+    ctx.fillStyle = "rgba(0,120,255,0.6)";
     waterParticles.forEach(p => {
         ctx.beginPath();
-        ctx.arc(p.x, p.y, 4, 0, Math.PI*2);
+        ctx.arc(p.x, p.y, 3, 0, Math.PI*2);
         ctx.fill();
     });
 
-    // vegetation
+    // --------------------
+    // STATIC VEGETATION (FIXED)
+    // --------------------
     const veg = document.getElementById("veg").value / 100;
 
-    for (let i = 0; i < land.length; i++) {
-        for (let j = 0; j < veg * 8; j++) {
-            if (Math.random() < veg) {
-                ctx.fillStyle = "green";
-                ctx.fillRect(
-                    i*(c.width/W),
-                    c.height-land[i]-Math.random()*10,
-                    2,2
-                );
+    if (!window.vegMap) {
+        window.vegMap = [];
+
+        for (let i = 0; i < W; i++) {
+            let count = Math.floor(veg * 6);
+            window.vegMap[i] = [];
+
+            for (let j = 0; j < count; j++) {
+                window.vegMap[i].push({
+                    offset: Math.random()
+                });
             }
         }
+    }
+
+    for (let i = 0; i < window.vegMap.length; i++) {
+        window.vegMap[i].forEach(p => {
+            ctx.fillStyle = "green";
+            ctx.fillRect(
+                i * (c.width / W),
+                c.height - land[i] - (p.offset * 10),
+                2, 2
+            );
+        });
     }
 }
 
 // --------------------
-// UPDATE TERRAIN
+// RESET TERRAIN
 // --------------------
 function updateTerrain() {
     initLand();
+    window.vegMap = null;
     drawLand();
 }
 
 // --------------------
-// WATER FLOW (DOWN SLOPE)
+// RIVER FLOW (FIXED ON LAND)
 // --------------------
 function animateWater(callback) {
 
     let particles = [];
 
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 50; i++) {
         particles.push({
             x: Math.random() * 500,
-            y: 20,
-            vx: 1 + Math.random(),
-            vy: 0.2 + Math.random() * 0.6
+            y: 30
         });
     }
 
@@ -230,11 +245,17 @@ function animateWater(callback) {
 
         particles.forEach(p => {
 
-            // downhill movement
-            p.x += p.vx + slope * 3;
-            p.y += p.vy + slope * 2;
+            let speed = 2 + slope * 5;
 
-            if (p.y > 250) p.y = 250;
+            p.x += speed;
+
+            let index = Math.floor((p.x / 500) * W);
+            if (index >= W) index = W - 1;
+
+            let targetY = 250 - land[index];
+
+            // stick to terrain
+            p.y += (targetY - p.y) * 0.25;
         });
 
         drawLand(particles);
@@ -274,12 +295,12 @@ function simulateErosion() {
     let newLand = [...land];
 
     for (let i = 1; i < W; i++) {
-        let diff = land[i-1] - land[i];
+        let diff = land[i - 1] - land[i];
 
         if (diff > 0) {
             let move = diff * factor;
 
-            newLand[i-1] -= move;
+            newLand[i - 1] -= move;
             newLand[i] += move * 0.7;
 
             erosion += move;
