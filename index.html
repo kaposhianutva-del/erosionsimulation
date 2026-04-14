@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Erosion & Deposition Simulator</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background: #f4f4f4;
+}
+
+header {
+    background: #2c3e50;
+    color: white;
+    padding: 1rem;
+    text-align: center;
+}
+
+.container {
+    display: flex;
+    flex-wrap: wrap;
+    padding: 10px;
+}
+
+.panel {
+    flex: 1;
+    min-width: 280px;
+    background: white;
+    padding: 15px;
+    margin: 10px;
+    border-radius: 8px;
+}
+
+canvas {
+    background: #e0f7ff;
+    border: 1px solid #ccc;
+}
+button {
+    padding: 10px;
+    margin-top: 10px;
+    width: 100%;
+}
+label {
+    display: block;
+    margin-top: 10px;
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+td, th {
+    border: 1px solid #ccc;
+    padding: 5px;
+    text-align: center;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <h1>🌊 Erosion & Deposition Landscape Simulator</h1>
+</header>
+
+<div class="container">
+
+<!-- CONTROLS -->
+<div class="panel">
+    <h3>Controls</h3>
+
+    <label>Water Flow Speed</label>
+    <input type="range" id="water" min="1" max="10" value="5">
+
+    <label>Slope</label>
+    <input type="range" id="slope" min="1" max="10" value="5">
+
+    <label>Ground Type</label>
+    <select id="ground">
+        <option value="sand">Sand</option>
+        <option value="soil">Soil</option>
+        <option value="rock">Rock</option>
+    </select>
+
+    <label>Vegetation Cover</label>
+    <input type="range" id="veg" min="0" max="10" value="3">
+
+    <button onclick="runStorm()">🌧 Run Storm (1 Year)</button>
+    <button onclick="resetSim()">🔄 Reset</button>
+</div>
+
+<!-- LANDSCAPE -->
+<div class="panel">
+    <h3>Landscape</h3>
+    <canvas id="land" width="400" height="200"></canvas>
+</div>
+
+<!-- GRAPH -->
+<div class="panel">
+    <h3>Data Over Time</h3>
+    <canvas id="chart"></canvas>
+</div>
+
+<!-- TABLE -->
+<div class="panel">
+    <h3>Data Table</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Year</th>
+                <th>Erosion</th>
+                <th>Deposition</th>
+                <th>Avg Height</th>
+            </tr>
+        </thead>
+        <tbody id="dataTable"></tbody>
+    </table>
+</div>
+
+</div>
+
+<script>
+// ----------------------
+// INITIAL LANDSCAPE
+// ----------------------
+let land = [];
+const WIDTH = 50;
+let year = 0;
+
+function initLand() {
+    land = [];
+    for (let i = 0; i < WIDTH; i++) {
+        land.push(100 - i * 1.2); // initial slope
+    }
+}
+initLand();
+
+// ----------------------
+// DRAW LAND
+// ----------------------
+function drawLand() {
+    const c = document.getElementById("land");
+    const ctx = c.getContext("2d");
+
+    ctx.clearRect(0, 0, c.width, c.height);
+
+    ctx.beginPath();
+    ctx.moveTo(0, c.height - land[0]);
+
+    for (let i = 0; i < land.length; i++) {
+        ctx.lineTo(i * (c.width / WIDTH), c.height - land[i]);
+    }
+
+    ctx.strokeStyle = "brown";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(34,139,34,0.3)";
+    ctx.lineTo(c.width, c.height);
+    ctx.lineTo(0, c.height);
+    ctx.fill();
+}
+
+// ----------------------
+// SIMULATION LOGIC
+// ----------------------
+let labels = [];
+let erosionData = [];
+let depositionData = [];
+let heightData = [];
+
+function getFactor() {
+    const water = +document.getElementById("water").value;
+    const slope = +document.getElementById("slope").value;
+    const veg = +document.getElementById("veg").value;
+    const ground = document.getElementById("ground").value;
+
+    let groundFactor = 1;
+    if (ground === "sand") groundFactor = 1.5;
+    if (ground === "soil") groundFactor = 1;
+    if (ground === "rock") groundFactor = 0.4;
+
+    let vegetationFactor = 1 - (veg / 15);
+
+    return water * slope * groundFactor * vegetationFactor * 0.05;
+}
+
+// ----------------------
+// RUN ONE YEAR
+// ----------------------
+function runStorm() {
+    let erosion = 0;
+    let deposition = 0;
+
+    const factor = getFactor();
+
+    let newLand = [...land];
+
+    for (let i = 1; i < land.length; i++) {
+        let diff = land[i - 1] - land[i];
+
+        if (diff > 0) {
+            let amount = diff * factor;
+            newLand[i - 1] -= amount;
+            newLand[i] += amount * 0.6;
+
+            erosion += amount;
+            deposition += amount * 0.6;
+        }
+    }
+
+    land = newLand;
+    year++;
+
+    let avgHeight = land.reduce((a, b) => a + b, 0) / land.length;
+
+    labels.push("Year " + year);
+    erosionData.push(erosion.toFixed(2));
+    depositionData.push(deposition.toFixed(2));
+    heightData.push(avgHeight.toFixed(2));
+
+    updateChart();
+    updateTable();
+    drawLand();
+}
+
+// ----------------------
+// CHART
+// ----------------------
+let chart;
+
+function updateChart() {
+    if (!chart) {
+        chart = new Chart(document.getElementById("chart"), {
+            type: "line",
+            data: {
+                labels: labels,
+                datasets: [
+                    { label: "Erosion", data: erosionData, borderColor: "red" },
+                    { label: "Deposition", data: depositionData, borderColor: "blue" },
+                    { label: "Avg Height", data: heightData, borderColor: "green" }
+                ]
+            }
+        });
+    } else {
+        chart.update();
+    }
+}
+
+// ----------------------
+// TABLE
+// ----------------------
+function updateTable() {
+    const table = document.getElementById("dataTable");
+    table.innerHTML = "";
+
+    for (let i = 0; i < labels.length; i++) {
+        table.innerHTML += `
+        <tr>
+            <td>${labels[i]}</td>
+            <td>${erosionData[i]}</td>
+            <td>${depositionData[i]}</td>
+            <td>${heightData[i]}</td>
+        </tr>`;
+    }
+}
+
+// ----------------------
+// RESET
+// ----------------------
+function resetSim() {
+    initLand();
+    year = 0;
+    labels = [];
+    erosionData = [];
+    depositionData = [];
+    heightData = [];
+
+    if (chart) chart.destroy();
+    chart = null;
+
+    updateTable();
+    drawLand();
+}
+
+// initial draw
+drawLand();
+</script>
+
+</body>
+</html>
