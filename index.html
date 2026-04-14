@@ -64,8 +64,8 @@ label {
 <div class="panel">
 <h3>Controls</h3>
 
-<label>Slope: <span id="slopeVal">50%</span></label>
-<input type="range" id="slope" min="0" max="100" value="50"
+<label>Slope: <span id="slopeVal">2.5%</span></label>
+<input type="range" id="slope" min="0" max="5" step="0.1" value="2.5"
 oninput="updateTerrain(); updateLabels();">
 
 <label>Water Flow Speed: <span id="waterVal">50%</span></label>
@@ -84,6 +84,7 @@ oninput="updateTerrain(); updateLabels();">
 </select>
 
 <button onclick="runStorm()">🌧 Run Storm (1 Year)</button>
+
 </div>
 
 <!-- LANDSCAPE -->
@@ -103,7 +104,7 @@ oninput="updateTerrain(); updateLabels();">
 <script>
 
 // --------------------
-// LAND DATA
+// DATA
 // --------------------
 let land = [];
 const W = 60;
@@ -115,21 +116,23 @@ let depositionData = [];
 let heightData = [];
 
 // --------------------
-// INIT LAND
+// INIT LAND (REALISTIC SLOPE)
 // --------------------
 function initLand() {
     land = [];
 
     const slope = document.getElementById("slope").value / 100;
 
+    let base = 180;
+
     for (let i = 0; i < W; i++) {
-        land.push(200 - i * slope * 120);
+        land.push(base - i * slope * 60);
     }
 }
 initLand();
 
 // --------------------
-// LABEL UPDATES
+// UPDATE LABELS
 // --------------------
 function updateLabels() {
     document.getElementById("slopeVal").innerText =
@@ -143,7 +146,7 @@ function updateLabels() {
 }
 
 // --------------------
-// DRAW LANDSCAPE
+// DRAW LAND
 // --------------------
 function drawLand(waterParticles = []) {
     const c = document.getElementById("land");
@@ -169,7 +172,7 @@ function drawLand(waterParticles = []) {
     ctx.fillStyle = groundColor;
     ctx.fill();
 
-    // water particles
+    // water
     ctx.fillStyle = "rgba(0,150,255,0.7)";
     waterParticles.forEach(p => {
         ctx.beginPath();
@@ -181,9 +184,7 @@ function drawLand(waterParticles = []) {
     const veg = document.getElementById("veg").value / 100;
 
     for (let i = 0; i < land.length; i++) {
-        let density = veg * 10;
-
-        for (let j = 0; j < density; j++) {
+        for (let j = 0; j < veg * 8; j++) {
             if (Math.random() < veg) {
                 ctx.fillStyle = "green";
                 ctx.fillRect(
@@ -197,7 +198,7 @@ function drawLand(waterParticles = []) {
 }
 
 // --------------------
-// UPDATE TERRAIN LIVE
+// UPDATE TERRAIN
 // --------------------
 function updateTerrain() {
     initLand();
@@ -205,17 +206,18 @@ function updateTerrain() {
 }
 
 // --------------------
-// WATER ANIMATION
+// WATER FLOW (DOWN SLOPE)
 // --------------------
 function animateWater(callback) {
+
     let particles = [];
 
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 40; i++) {
         particles.push({
-            x: Math.random()*500,
-            y: 0,
-            vx: (Math.random()-0.5)*2,
-            vy: 2 + Math.random()*3
+            x: Math.random() * 500,
+            y: 20,
+            vx: 1 + Math.random(),
+            vy: 0.2 + Math.random() * 0.6
         });
     }
 
@@ -224,14 +226,20 @@ function animateWater(callback) {
     function step() {
         frames++;
 
+        const slope = document.getElementById("slope").value / 100;
+
         particles.forEach(p => {
-            p.x += p.vx;
-            p.y += p.vy;
+
+            // downhill movement
+            p.x += p.vx + slope * 3;
+            p.y += p.vy + slope * 2;
+
+            if (p.y > 250) p.y = 250;
         });
 
         drawLand(particles);
 
-        if (frames < 45) {
+        if (frames < 60) {
             requestAnimationFrame(step);
         } else {
             callback();
@@ -259,7 +267,9 @@ function simulateErosion() {
 
     let vegFactor = 1 - veg;
 
-    let factor = water * groundFactor * vegFactor * 0.08;
+    let slopeFactor = document.getElementById("slope").value / 5;
+
+    let factor = water * groundFactor * vegFactor * slopeFactor * 0.06;
 
     let newLand = [...land];
 
@@ -328,7 +338,7 @@ function updateChart() {
     }
 }
 
-// initial load
+// INIT
 updateLabels();
 drawLand();
 
