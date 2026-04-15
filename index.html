@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Erosion Simulator Fixed</title>
+<title>Erosion Simulator Fixed UI</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
@@ -33,7 +33,7 @@ td, th { border:1px solid #ccc; padding:4px; text-align:center; }
 <body>
 
 <header>
-<h2>🌊 Erosion & Landscape Simulator (Fixed)</h2>
+<h2>🌊 Erosion & Landscape Simulator (Stable UI + Data)</h2>
 </header>
 
 <div class="container">
@@ -43,16 +43,16 @@ td, th { border:1px solid #ccc; padding:4px; text-align:center; }
 <h3>Controls</h3>
 
 <label>Slope <span id="slopeVal">2.5%</span></label>
-<input id="slope" type="range" min="0" max="5" step="0.1" value="2.5" oninput="updateTerrain()">
+<input id="slope" type="range" min="0" max="5" step="0.1" value="2.5" oninput="syncUI()">
 
 <label>Water Flow <span id="waterVal">50%</span></label>
-<input id="water" type="range" min="0" max="100" value="50">
+<input id="water" type="range" min="0" max="100" value="50" oninput="syncUI()">
 
 <label>Vegetation <span id="vegVal">40%</span></label>
-<input id="veg" type="range" min="0" max="100" value="40">
+<input id="veg" type="range" min="0" max="100" value="40" oninput="syncUI()">
 
-<label>Ground</label>
-<select id="ground">
+<label>Ground Type</label>
+<select id="ground" onchange="syncUI()">
 <option value="sand">Sand</option>
 <option value="soil" selected>Soil</option>
 <option value="rock">Rock</option>
@@ -120,31 +120,24 @@ function inputs(){
     };
 }
 
-// ---------------- INIT ----------------
-function init(){
-
-    land = [];
-    waterFlow = new Array(W).fill(0);
-
-    const { slope } = inputs();
-    let base = 180;
-
-    for(let i=0;i<W;i++){
-        land[i] = base - i*slope*80;
-    }
+// ---------------- UI SYNC ----------------
+function syncUI(){
+    slopeVal.innerText = get("slope") + "%";
+    waterVal.innerText = get("water") + "%";
+    vegVal.innerText = get("veg") + "%";
 }
 
-// ---------------- UPDATE TERRAIN ON SLIDER ----------------
-function updateTerrain(){
+// ---------------- INIT ----------------
+function init(){
+    land=[];
+    waterFlow=new Array(W).fill(0);
 
-    const { slope } = inputs();
-    let base = 180;
+    const {slope}=inputs();
+    let base=180;
 
     for(let i=0;i<W;i++){
-        land[i] = base - i*slope*80;
+        land[i]=base-i*slope*80;
     }
-
-    draw();
 }
 
 // ---------------- SLOPE ----------------
@@ -153,16 +146,16 @@ function slopeAt(i){
     return land[i-1]-land[i+1];
 }
 
-// ---------------- EROSION (REAL TREND MODEL) ----------------
+// ---------------- EROSION (FIXED STABLE TREND) ----------------
 function erode(){
 
-    const { water, veg, ground } = inputs();
+    const {water,veg,ground}=inputs();
 
     let factor =
-        ground==="sand"?1.7:
-        ground==="rock"?0.3:1;
+        ground==="sand"?1.6:
+        ground==="rock"?0.35:1;
 
-    let erosion=0, deposition=0;
+    let erosion=0,deposition=0;
 
     let next=[...land];
 
@@ -170,18 +163,21 @@ function erode(){
 
         let s=Math.max(0,slopeAt(i));
 
+        // balanced growth model (prevents flatlining)
         let force =
             (s*water*0.03) +
-            (water*0.015);
+            (water*0.02);
 
-        force *= factor;
-        force *= (1-veg);
+        force*=factor;
+        force*=(1-veg);
 
-        // slow increasing channel effect
-        force *= (1 + year*0.02);
+        // slight long-term increase WITHOUT runaway
+        force*= (1 + Math.log(1 + year)/6);
 
         let move=Math.min(force,0.35);
-        move=Math.max(move,0.003); // tiny baseline erosion
+
+        // tiny baseline erosion (keeps motion alive)
+        move=Math.max(move,0.004);
 
         next[i-1]-=move;
         next[i]+=move*0.8;
@@ -229,16 +225,16 @@ function draw(){
     ctx.fillStyle="#8B5A2B";
     ctx.fill();
 
-    // WATER VISUAL
+    // water visualization
     ctx.fillStyle="rgba(0,120,255,0.4)";
     for(let i=0;i<W;i++){
-        if(waterFlow[i]>0.5){
+        if(waterFlow[i]>0.3){
             ctx.fillRect(i*(c.width/W),c.height-land[i],5,3);
             waterFlow[i]*=0.9;
         }
     }
 
-    // VEGETATION
+    // vegetation
     let veg=get("veg")/100;
 
     for(let i=0;i<W;i++){
@@ -249,7 +245,7 @@ function draw(){
     }
 }
 
-// ---------------- RUN YEAR ----------------
+// ---------------- RUN ----------------
 function runYear(){
 
     const result=erode();
@@ -323,6 +319,7 @@ function resetSim(){
 
 // ---------------- START ----------------
 init();
+syncUI();
 draw();
 
 </script>
