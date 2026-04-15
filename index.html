@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Erosion Simulator</title>
+<title>Erosion & Deposition Simulator</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
@@ -82,6 +82,7 @@ td, th { border:1px solid #ccc; padding:5px; text-align:center; }
 // STATE
 // --------------------
 let land = [];
+let flowMap = [];
 const W = 60;
 let year = 0;
 
@@ -97,6 +98,8 @@ let chart;
 // --------------------
 function initLand() {
     land = [];
+    flowMap = new Array(W).fill(0);
+
     const slope = document.getElementById("slope").value / 100;
     let base = 180;
 
@@ -119,7 +122,7 @@ function updateLabels() {
 // --------------------
 function drawLand(waterParticles = []) {
 
-    const c = landCanvas = document.getElementById("land");
+    const c = document.getElementById("land");
     const ctx = c.getContext("2d");
 
     ctx.clearRect(0,0,c.width,c.height);
@@ -138,7 +141,15 @@ function drawLand(waterParticles = []) {
     ctx.fillStyle=color;
     ctx.fill();
 
-    // water
+    // river (slightly darker where flow is stronger)
+    for(let i=0;i<W;i++){
+        if(flowMap[i] > 1){
+            ctx.fillStyle = "rgba(0,100,255,0.3)";
+            ctx.fillRect(i*(c.width/W), c.height-land[i]-2, 6, 4);
+        }
+    }
+
+    // water animation
     ctx.fillStyle="rgba(0,120,255,0.6)";
     waterParticles.forEach(p=>{
         ctx.beginPath();
@@ -177,7 +188,7 @@ function updateTerrain(){
 }
 
 // --------------------
-// WATER FLOW
+// WATER FLOW (records memory)
 // --------------------
 function animateWater(callback){
 
@@ -195,13 +206,17 @@ function animateWater(callback){
         const slope = document.getElementById("slope").value/100;
 
         particles.forEach(p=>{
-            p.x+=2+slope*5;
+
+            p.x += 2 + slope*5;
 
             let idx=Math.floor((p.x/500)*W);
             if(idx>=W) idx=W-1;
 
             let target=250-land[idx];
-            p.y+=(target-p.y)*0.3;
+            p.y += (target-p.y)*0.3;
+
+            // record flow
+            flowMap[idx] += 0.5;
         });
 
         drawLand(particles);
@@ -209,6 +224,12 @@ function animateWater(callback){
         if(frames<60){
             requestAnimationFrame(step);
         } else {
+
+            // decay flow memory
+            for(let i=0;i<W;i++){
+                flowMap[i] *= 0.9;
+            }
+
             callback();
         }
     }
@@ -217,14 +238,14 @@ function animateWater(callback){
 }
 
 // --------------------
-// EROSION MODEL (STRONGER)
+// EROSION (with channel memory)
 // --------------------
 function simulateErosion(){
 
     let erosion=0;
     let deposition=0;
 
-    const water = waterValInput = document.getElementById("water").value/100;
+    const water = document.getElementById("water").value/100;
     const veg = document.getElementById("veg").value/100;
     const ground = document.getElementById("ground").value;
 
@@ -235,16 +256,20 @@ function simulateErosion(){
     let newLand=[...land];
 
     for(let i=1;i<W;i++){
-        let diff = land[i-1]-land[i];
 
-        if(diff>0){
-            let move = diff*factor;
+        let diff = land[i-1] - land[i];
 
-            newLand[i-1]-=move;
-            newLand[i]+=move*0.7;
+        if(diff > 0){
 
-            erosion+=move;
-            deposition+=move*0.7;
+            let flowBoost = 1 + flowMap[i]*0.05;
+
+            let move = diff * factor * flowBoost;
+
+            newLand[i-1] -= move;
+            newLand[i] += move * 0.7;
+
+            erosion += move;
+            deposition += move * 0.7;
         }
     }
 
