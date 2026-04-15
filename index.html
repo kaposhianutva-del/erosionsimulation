@@ -2,53 +2,18 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Erosion & Deposition Simulator</title>
+<title>Erosion Simulator</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
-body {
-    font-family: Arial;
-    margin: 0;
-    background: #f4f4f4;
-}
-
-header {
-    background: #2c3e50;
-    color: white;
-    padding: 1rem;
-    text-align: center;
-}
-
-.container {
-    display: flex;
-    flex-wrap: wrap;
-    padding: 10px;
-}
-
-.panel {
-    flex: 1;
-    min-width: 300px;
-    background: white;
-    margin: 10px;
-    padding: 12px;
-    border-radius: 8px;
-}
-
-canvas {
-    border: 1px solid #ccc;
-    background: #cfefff;
-}
-
-button {
-    width: 100%;
-    padding: 10px;
-    margin-top: 10px;
-}
-
-label {
-    display:block;
-    margin-top:10px;
-}
+body { font-family: Arial; margin:0; background:#f4f4f4; }
+header { background:#2c3e50; color:white; padding:1rem; text-align:center; }
+.container { display:flex; flex-wrap:wrap; padding:10px; }
+.panel { flex:1; min-width:300px; background:white; margin:10px; padding:12px; border-radius:8px; }
+canvas { border:1px solid #ccc; background:#cfefff; }
+button { width:100%; padding:10px; margin-top:10px; }
+table { width:100%; border-collapse:collapse; margin-top:10px; }
+td, th { border:1px solid #ccc; padding:5px; text-align:center; }
 </style>
 </head>
 
@@ -60,21 +25,17 @@ label {
 
 <div class="container">
 
-<!-- CONTROLS -->
 <div class="panel">
 <h3>Controls</h3>
 
 <label>Slope: <span id="slopeVal">2.5%</span></label>
-<input type="range" id="slope" min="0" max="5" step="0.1" value="2.5"
-oninput="updateTerrain(); updateLabels();">
+<input type="range" id="slope" min="0" max="5" step="0.1" value="2.5" oninput="updateTerrain(); updateLabels();">
 
-<label>Water Flow Speed: <span id="waterVal">50%</span></label>
-<input type="range" id="water" min="0" max="100" value="50"
-oninput="updateLabels()">
+<label>Water Flow: <span id="waterVal">50%</span></label>
+<input type="range" id="water" min="0" max="100" value="50" oninput="updateLabels()">
 
-<label>Vegetation Cover: <span id="vegVal">40%</span></label>
-<input type="range" id="veg" min="0" max="100" value="40"
-oninput="updateTerrain(); updateLabels()">
+<label>Vegetation: <span id="vegVal">40%</span></label>
+<input type="range" id="veg" min="0" max="100" value="40" oninput="updateTerrain(); updateLabels()">
 
 <label>Ground Type</label>
 <select id="ground" onchange="updateTerrain()">
@@ -83,20 +44,34 @@ oninput="updateTerrain(); updateLabels()">
 <option value="rock">Rock</option>
 </select>
 
-<button onclick="runStorm()">🌧 Run Storm (1 Year)</button>
+<button onclick="runStorm()">🌧 Run Storm</button>
+<button onclick="resetSim()">🔄 Reset</button>
 
 </div>
 
-<!-- LANDSCAPE -->
 <div class="panel">
 <h3>Landscape</h3>
 <canvas id="land" width="500" height="250"></canvas>
 </div>
 
-<!-- GRAPH -->
 <div class="panel">
-<h3>Data Over Time</h3>
+<h3>Graph</h3>
 <canvas id="chart"></canvas>
+</div>
+
+<div class="panel">
+<h3>Data Table</h3>
+<table>
+<thead>
+<tr>
+<th>Year</th>
+<th>Erosion</th>
+<th>Deposition</th>
+<th>Avg Height</th>
+</tr>
+</thead>
+<tbody id="tableBody"></tbody>
+</table>
 </div>
 
 </div>
@@ -115,148 +90,123 @@ let erosionData = [];
 let depositionData = [];
 let heightData = [];
 
+let chart;
+
 // --------------------
-// INIT LAND (SLOPE MODEL)
+// INIT LAND
 // --------------------
 function initLand() {
     land = [];
-
     const slope = document.getElementById("slope").value / 100;
-
     let base = 180;
 
     for (let i = 0; i < W; i++) {
         land.push(base - i * slope * 80);
     }
 }
-initLand();
 
 // --------------------
 // LABELS
 // --------------------
 function updateLabels() {
-    document.getElementById("slopeVal").innerText =
-        document.getElementById("slope").value + "%";
-
-    document.getElementById("waterVal").innerText =
-        document.getElementById("water").value + "%";
-
-    document.getElementById("vegVal").innerText =
-        document.getElementById("veg").value + "%";
+    slopeVal.innerText = slope.value + "%";
+    waterVal.innerText = water.value + "%";
+    vegVal.innerText = veg.value + "%";
 }
 
 // --------------------
-// DRAW LAND (STATIC VEG)
+// DRAW LAND
 // --------------------
 function drawLand(waterParticles = []) {
 
-    const c = document.getElementById("land");
+    const c = landCanvas = document.getElementById("land");
     const ctx = c.getContext("2d");
 
     ctx.clearRect(0,0,c.width,c.height);
 
     const ground = document.getElementById("ground").value;
+    let color = ground==="sand"?"#d8c27a":ground==="rock"?"#666":"#8B5A2B";
 
-    let groundColor = "#8B5A2B";
-    if (ground === "sand") groundColor = "#d8c27a";
-    if (ground === "rock") groundColor = "#666";
-
-    // terrain
     ctx.beginPath();
-    ctx.moveTo(0, c.height);
+    ctx.moveTo(0,c.height);
 
-    for (let i = 0; i < land.length; i++) {
-        ctx.lineTo(i * (c.width/W), c.height - land[i]);
+    for(let i=0;i<W;i++){
+        ctx.lineTo(i*(c.width/W), c.height-land[i]);
     }
 
-    ctx.lineTo(c.width, c.height);
-    ctx.fillStyle = groundColor;
+    ctx.lineTo(c.width,c.height);
+    ctx.fillStyle=color;
     ctx.fill();
 
     // water
-    ctx.fillStyle = "rgba(0,120,255,0.6)";
-    waterParticles.forEach(p => {
+    ctx.fillStyle="rgba(0,120,255,0.6)";
+    waterParticles.forEach(p=>{
         ctx.beginPath();
-        ctx.arc(p.x, p.y, 3, 0, Math.PI*2);
+        ctx.arc(p.x,p.y,3,0,Math.PI*2);
         ctx.fill();
     });
 
-    // vegetation (STATIC)
-    const veg = document.getElementById("veg").value / 100;
+    // vegetation (static)
+    const veg = document.getElementById("veg").value/100;
 
-    if (!window.vegMap) {
-        window.vegMap = [];
-
-        for (let i = 0; i < W; i++) {
-            window.vegMap[i] = [];
-
-            for (let j = 0; j < veg * 6; j++) {
-                window.vegMap[i].push({
-                    offset: Math.random()
-                });
+    if(!window.vegMap){
+        window.vegMap=[];
+        for(let i=0;i<W;i++){
+            window.vegMap[i]=[];
+            for(let j=0;j<veg*6;j++){
+                window.vegMap[i].push({offset:Math.random()});
             }
         }
     }
 
-    for (let i = 0; i < window.vegMap.length; i++) {
-        window.vegMap[i].forEach(p => {
-            ctx.fillStyle = "green";
-            ctx.fillRect(
-                i * (c.width / W),
-                c.height - land[i] - p.offset * 10,
-                2, 2
-            );
+    for(let i=0;i<W;i++){
+        window.vegMap[i].forEach(p=>{
+            ctx.fillStyle="green";
+            ctx.fillRect(i*(c.width/W), c.height-land[i]-p.offset*10,2,2);
         });
     }
 }
 
 // --------------------
-// RESET TERRAIN ON CHANGE
+// UPDATE TERRAIN
 // --------------------
-function updateTerrain() {
-    window.vegMap = null;
+function updateTerrain(){
+    window.vegMap=null;
     initLand();
     drawLand();
 }
 
 // --------------------
-// RIVER FLOW (FIXED)
+// WATER FLOW
 // --------------------
-function animateWater(callback) {
+function animateWater(callback){
 
-    let particles = [];
+    let particles=[];
 
-    for (let i = 0; i < 50; i++) {
-        particles.push({
-            x: Math.random() * 500,
-            y: 30
-        });
+    for(let i=0;i<40;i++){
+        particles.push({x:Math.random()*500,y:30});
     }
 
-    let frames = 0;
+    let frames=0;
 
-    function step() {
+    function step(){
         frames++;
 
-        const slope = document.getElementById("slope").value / 100;
+        const slope = document.getElementById("slope").value/100;
 
-        particles.forEach(p => {
+        particles.forEach(p=>{
+            p.x+=2+slope*5;
 
-            let speed = 2 + slope * 5;
+            let idx=Math.floor((p.x/500)*W);
+            if(idx>=W) idx=W-1;
 
-            p.x += speed;
-
-            let index = Math.floor((p.x / 500) * W);
-            if (index >= W) index = W - 1;
-
-            let targetY = 250 - land[index];
-
-            p.y += (targetY - p.y) * 0.25;
+            let target=250-land[idx];
+            p.y+=(target-p.y)*0.3;
         });
 
         drawLand(particles);
 
-        if (frames < 60) {
+        if(frames<60){
             requestAnimationFrame(step);
         } else {
             callback();
@@ -267,86 +217,80 @@ function animateWater(callback) {
 }
 
 // --------------------
-// EROSION MODEL
+// EROSION MODEL (STRONGER)
 // --------------------
-function simulateErosion() {
+function simulateErosion(){
 
-    let erosion = 0;
-    let deposition = 0;
+    let erosion=0;
+    let deposition=0;
 
-    const water = document.getElementById("water").value / 100;
-    const veg = document.getElementById("veg").value / 100;
+    const water = waterValInput = document.getElementById("water").value/100;
+    const veg = document.getElementById("veg").value/100;
     const ground = document.getElementById("ground").value;
 
-    let groundFactor = 1;
-    if (ground === "sand") groundFactor = 1.6;
-    if (ground === "rock") groundFactor = 0.4;
+    let groundFactor = ground==="sand"?1.8:ground==="rock"?0.4:1;
 
-    let vegFactor = 1 - veg;
+    let factor = water * (1-veg) * groundFactor * 0.15;
 
-    let slopeFactor = document.getElementById("slope").value / 5;
+    let newLand=[...land];
 
-    let factor = water * groundFactor * vegFactor * slopeFactor * 0.06;
+    for(let i=1;i<W;i++){
+        let diff = land[i-1]-land[i];
 
-    let newLand = [...land];
+        if(diff>0){
+            let move = diff*factor;
 
-    for (let i = 1; i < W; i++) {
-        let diff = land[i - 1] - land[i];
+            newLand[i-1]-=move;
+            newLand[i]+=move*0.7;
 
-        if (diff > 0) {
-            let move = diff * factor;
-
-            newLand[i - 1] -= move;
-            newLand[i] += move * 0.7;
-
-            erosion += move;
-            deposition += move * 0.7;
+            erosion+=move;
+            deposition+=move*0.7;
         }
     }
 
-    land = newLand;
+    land=newLand;
 
-    return { erosion, deposition };
+    return {erosion,deposition};
 }
 
 // --------------------
 // RUN STORM
 // --------------------
-function runStorm() {
+function runStorm(){
 
-    animateWater(() => {
+    animateWater(()=>{
 
-        const result = simulateErosion();
+        const result=simulateErosion();
 
         year++;
 
-        let avg = land.reduce((a,b)=>a+b,0)/land.length;
+        let avg = land.reduce((a,b)=>a+b,0)/W;
 
-        labels.push("Year " + year);
+        labels.push("Y"+year);
         erosionData.push(result.erosion);
         depositionData.push(result.deposition);
         heightData.push(avg);
 
         updateChart();
+        updateTable();
         drawLand();
     });
 }
 
 // --------------------
-// CHART
+// GRAPH
 // --------------------
-let chart;
+function updateChart(){
 
-function updateChart() {
-    if (!chart) {
-        chart = new Chart(document.getElementById("chart"), {
-            type: "line",
-            data: {
+    if(!chart){
+        chart=new Chart(document.getElementById("chart"),{
+            type:"line",
+            data:{
                 labels,
-                datasets: [
-                    { label:"Erosion", data: erosionData },
-                    { label:"Deposition", data: depositionData },
-                    { label:"Avg Height", data: heightData }
+                datasets:[
+                    {label:"Erosion",data:erosionData},
+                    {label:"Deposition",data:depositionData},
+                    {label:"Avg Height",data:heightData}
                 ]
             }
         });
@@ -355,9 +299,45 @@ function updateChart() {
     }
 }
 
+// --------------------
+// TABLE
+// --------------------
+function updateTable(){
+
+    const tbody=document.getElementById("tableBody");
+    tbody.innerHTML="";
+
+    for(let i=0;i<labels.length;i++){
+        tbody.innerHTML+=`
+        <tr>
+        <td>${labels[i]}</td>
+        <td>${erosionData[i].toFixed(2)}</td>
+        <td>${depositionData[i].toFixed(2)}</td>
+        <td>${heightData[i].toFixed(2)}</td>
+        </tr>`;
+    }
+}
+
+// --------------------
+// RESET
+// --------------------
+function resetSim(){
+    year=0;
+    labels=[];
+    erosionData=[];
+    depositionData=[];
+    heightData=[];
+    chart=null;
+
+    document.getElementById("chart").getContext("2d").clearRect(0,0,500,300);
+
+    updateTerrain();
+    updateTable();
+}
+
 // INIT
 updateLabels();
-drawLand();
+updateTerrain();
 
 </script>
 
