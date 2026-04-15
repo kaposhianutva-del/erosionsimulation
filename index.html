@@ -277,13 +277,16 @@ function simulateErosion(){
 
         let flowBoost = 1 + flowMap[i]*0.06;
 
-        let move = (slopeErosion * flowBoost) + baseErosion;
+        let move = Math.max(
+    0,
+    (Math.abs(slopeErosion) * flowBoost) + baseErosion
+);
 
         newLand[i-1] -= move;
         newLand[i] += move * 0.7;
 
-        erosion += move;
-        deposition += move * 0.7;
+    erosion += move;
+deposition += move * 0.5;
     }
 
     land = newLand;
