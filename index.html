@@ -36,7 +36,7 @@ td, th { border:1px solid #ccc; padding:5px; text-align:center; }
 <h3>Controls</h3>
 
 <div class="control-group">
-<label>Slope: <span id="slopeVal">2.5%</span></label>
+<label>Slope (initial only): <span id="slopeVal">2.5%</span></label>
 <input type="range" id="slope" min="0" max="5" step="0.1" value="2.5"
 oninput="updateTerrain(); updateLabels();">
 </div>
@@ -64,7 +64,7 @@ oninput="updateTerrain(); updateLabels();">
 <button onclick="resetSim()">🔄 Reset</button>
 </div>
 
-<!-- LANDSCAPE -->
+<!-- LAND -->
 <div class="panel">
 <h3>Landscape</h3>
 <canvas id="land" width="500" height="250"></canvas>
@@ -124,7 +124,7 @@ function initLand() {
     }
 }
 
-// -------------------- LABELS --------------------
+// -------------------- UI --------------------
 function updateLabels() {
     slopeVal.innerText = slope.value + "%";
     waterVal.innerText = water.value + "%";
@@ -161,40 +161,21 @@ function drawLand(particles = []) {
         }
     }
 
-    // water particles
+    // water
     ctx.fillStyle="rgba(0,120,255,0.6)";
     particles.forEach(p=>{
         ctx.beginPath();
         ctx.arc(p.x,p.y,3,0,Math.PI*2);
         ctx.fill();
     });
-
-    // vegetation
-    const veg = document.getElementById("veg").value/100;
-
-    if(!window.vegMap){
-        window.vegMap=[];
-        for(let i=0;i<W;i++){
-            window.vegMap[i]=[];
-            for(let j=0;j<veg*6;j++){
-                window.vegMap[i].push({offset:Math.random()});
-            }
-        }
-    }
-
-    for(let i=0;i<W;i++){
-        window.vegMap[i].forEach(p=>{
-            ctx.fillStyle="green";
-            ctx.fillRect(i*(c.width/W), c.height-land[i]-p.offset*10,2,2);
-        });
-    }
 }
 
-// -------------------- UPDATE TERRAIN --------------------
-function updateTerrain(){
-    window.vegMap=null;
-    initLand();
-    drawLand();
+// -------------------- TERRAIN-BASED SLOPE --------------------
+function computeSlopeAt(i){
+
+    if(i<=0 || i>=W-1) return 0;
+
+    return (land[i-1] - land[i+1]) / 2;
 }
 
 // -------------------- WATER FLOW --------------------
@@ -213,14 +194,14 @@ function animateWater(callback){
 
         frames++;
 
-        const slope = document.getElementById("slope").value/100;
-
         particles.forEach(p=>{
-
-            p.x += 2 + slope*5;
 
             let idx=Math.floor((p.x/500)*W);
             if(idx>=W) idx=W-1;
+
+            let slopeForce = computeSlopeAt(idx) * 0.05;
+
+            p.x += 2 + Math.max(0, slopeForce);
 
             let target=250-land[idx];
             p.y += (target-p.y)*0.3;
@@ -245,7 +226,7 @@ function animateWater(callback){
     step();
 }
 
-// -------------------- EROSION (STABLE MODEL) --------------------
+// -------------------- EROSION MODEL --------------------
 function simulateErosion(){
 
     let erosion=0;
@@ -255,27 +236,25 @@ function simulateErosion(){
     const veg = document.getElementById("veg").value/100;
     const ground = document.getElementById("ground").value;
 
-    let groundFactor = ground==="sand"?1.6:ground==="rock"?0.3:1;
-
-    let factor = water * (1-veg) * groundFactor * 0.1;
+    let groundFactor =
+        ground==="sand"?1.6:
+        ground==="rock"?0.3:1;
 
     let newLand=[...land];
 
     for(let i=1;i<W;i++){
 
-        let diff = land[i-1] - land[i];
+        let slope = computeSlopeAt(i);
 
-        // base sheet erosion (fixes slope=0 issue)
         let baseErosion = 0.015 * water * (1-veg);
 
-        let slopeErosion = diff * factor;
+        let slopeErosion = slope * water * groundFactor * 0.08;
 
         let flowBoost = 1 + flowMap[i]*0.05;
 
-        let move = (slopeErosion * flowBoost) + baseErosion;
+        let move = (Math.abs(slopeErosion) * flowBoost) + baseErosion;
 
-        // CAP (prevents runaway erosion)
-        move = Math.min(Math.max(move, 0), 0.8);
+        move = Math.min(move, 0.8);
 
         newLand[i-1] -= move;
         newLand[i] += move * 0.7;
@@ -291,7 +270,7 @@ function simulateErosion(){
     return {erosion,deposition};
 }
 
-// -------------------- SLOPE RELAXATION (FIXS SPIKES) --------------------
+// -------------------- SLOPE RELAXATION --------------------
 function relaxSlopes(){
 
     let smoothed=[...land];
@@ -306,7 +285,7 @@ function relaxSlopes(){
     land=smoothed;
 }
 
-// -------------------- RUN STORM --------------------
+// -------------------- RUN --------------------
 function runStorm(){
 
     if(animationRunning) return;
@@ -390,7 +369,7 @@ function resetSim(){
     updateTerrain();
 }
 
-// INIT
+// -------------------- INIT --------------------
 updateLabels();
 updateTerrain();
 
